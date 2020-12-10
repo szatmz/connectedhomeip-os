@@ -1,0 +1,2 @@
+chip.rpc.Response.packet max_size:1500
+chip.rpc.PacketOnTransport.packet max_size:1500

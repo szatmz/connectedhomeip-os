@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package chip.rpc;
+
+message Empty {
+}
+
+message Response {
+  bytes packet = 1;
+}
+
+message Transport {
+  uint32 number = 1;
+}
+
+message PacketOnTransport {
+  uint32 transportnumber = 1;
+  bytes packet = 2;
+}
+
+service TestService {
+  rpc OpenTransport(Transport) returns (stream Response) {}
+  rpc SendMessage(PacketOnTransport) returns (Empty) {}
+  rpc MessageTest(Transport) returns (Empty){}
+}
