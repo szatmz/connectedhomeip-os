@@ -37,6 +37,10 @@
 #include <os/log.h>
 #endif
 
+#if CHIP_LOGGING_STYLE_PIGWEED
+#include "pw_log/log.h"
+#endif
+
 #if HAVE_SYS_TIME_H && CHIP_LOGGING_STYLE_STDIO_WITH_TIMESTAMPS
 #include <sys/time.h>
 #endif // HAVE_SYS_TIME_H && CHIP_LOGGING_STYLE_STDIO_WITH_TIMESTAMPS
@@ -156,6 +160,41 @@ DLL_EXPORT __CHIP_LOGGING_LINK_ATTRIBUTE void LogV(uint8_t module, uint8_t categ
 #if TARGET_OS_MAC && TARGET_OS_IPHONE == 0
         fprintf(stdout, "%s\033[0m\n", formattedMsg);
 #endif
+
+#elif CHIP_LOGGING_STYLE_PIGWEED
+
+        char moduleName[ChipLoggingModuleNameLen + 1];
+        GetModuleName(moduleName, module);
+
+        char formattedMsg[512];
+        int32_t prefixLen = snprintf(formattedMsg, sizeof(formattedMsg), "CHIP: [%s] ", moduleName);
+        if (prefixLen < 0)
+        {
+            // This should never happens.
+            return;
+        }
+
+        if (static_cast<size_t>(prefixLen) >= sizeof(formattedMsg))
+        {
+            prefixLen = sizeof(formattedMsg) - 1;
+        }
+
+        vsnprintf(formattedMsg + prefixLen, sizeof(formattedMsg) - static_cast<size_t>(prefixLen), msg, v);
+
+        switch (category)
+        {
+        case kLogCategory_Error:
+            PW_LOG_ERROR("%s", formattedMsg);
+            break;
+
+        case kLogCategory_Progress:
+            PW_LOG_INFO("%s", formattedMsg);
+            break;
+
+        case kLogCategory_Detail:
+            PW_LOG_DEBUG("%s", formattedMsg);
+            break;
+        }
 
 #else
 

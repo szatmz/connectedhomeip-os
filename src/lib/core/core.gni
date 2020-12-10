@@ -69,7 +69,7 @@ assert(chip_target_style == "unix" || chip_target_style == "embedded",
 assert(
     chip_logging_style == "android" || chip_logging_style == "external" ||
         chip_logging_style == "stdio" || chip_logging_style == "stdio_weak" ||
-        chip_logging_style == "darwin",
+        chip_logging_style == "darwin" || chip_logging_style == "pigweed",
     "Please select a valid logging style: android, external, stdio, stdio_weak")
 
 assert(
