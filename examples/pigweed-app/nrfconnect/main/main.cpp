@@ -29,6 +29,7 @@
 #include "pw_hdlc_lite/rpc_packets.h"
 #include "pw_hdlc_lite/sys_io_stream.h"
 #include "pw_log/log.h"
+#include "pw_rpc/channel.h"
 #include "pw_rpc/echo_service_nanopb.h"
 #include "pw_rpc/server.h"
 
@@ -108,8 +109,41 @@ constexpr size_t kMaxTransmissionUnit = 1500;
 // Used to write HDLC data to pw::sys_io.
 pw::stream::SysIoWriter writer;
 
+struct k_mutex uart_mutex;
+
+template <size_t buffer_size>
+class ChipRpcChannelOutputBuffer : public pw::rpc::ChannelOutput {
+ public:
+  constexpr ChipRpcChannelOutputBuffer(pw::stream::Writer& writer,
+                                       uint8_t address,
+                                       const char* channel_name)
+      : pw::rpc::ChannelOutput(channel_name), writer_(writer), address_(address) {}
+
+  std::span<std::byte> AcquireBuffer() override {
+      k_mutex_lock(&uart_mutex, K_FOREVER);
+      return buffer_;
+  }
+
+  pw::Status SendAndReleaseBuffer(std::span<const std::byte> buffer) override {
+    PW_DASSERT(buffer.data() == buffer_.data());
+    if (buffer.empty()) {
+      k_mutex_unlock(&uart_mutex);
+      return pw::Status::Ok();
+    }
+    pw::Status ret = pw::hdlc_lite::WriteInformationFrame(address_, buffer, writer_);
+    k_mutex_unlock(&uart_mutex);
+    return ret;
+  }
+
+ private:
+  pw::stream::Writer& writer_;
+  std::array<std::byte, buffer_size> buffer_;
+  const uint8_t address_;
+};
+
+
 // Set up the output channel for the pw_rpc server to use to use.
-pw::hdlc_lite::RpcChannelOutputBuffer<kMaxTransmissionUnit> hdlc_channel_output(
+ChipRpcChannelOutputBuffer<kMaxTransmissionUnit> hdlc_channel_output(
     writer, pw::hdlc_lite::kDefaultRpcAddress, "HDLC channel");
 
 pw::rpc::Channel channels[] = {
@@ -130,8 +164,10 @@ void Start() {
   // Send log messages to HDLC address 1. This prevents logs from interfering
   // with pw_rpc communications.
   pw::log_basic::SetOutput([](std::string_view log) {
+    k_mutex_lock(&uart_mutex, K_FOREVER);
     pw::hdlc_lite::WriteInformationFrame(
         1, std::as_bytes(std::span(log)), writer);
+    k_mutex_unlock(&uart_mutex);
   });
 
   // Set up the server and start processing data.
@@ -242,56 +278,66 @@ TestSessMgrCallback callback;
 void CheckMessageTest(void * inContext, void *, void *)
 {
     TestContext & ctx = *reinterpret_cast<TestContext *>(inContext);
-    CHIP_ERROR err = ctx.Init();
+//     CHIP_ERROR err = ctx.Init();
 
-    uint16_t payload_len = sizeof(PAYLOAD);
+//     uint16_t payload_len = sizeof(PAYLOAD);
 
-    ctx.GetInetLayer().SystemLayer()->Init(nullptr);
+//     ctx.GetInetLayer().SystemLayer()->Init(nullptr);
 
-    chip::System::PacketBufferHandle buffer = chip::System::PacketBuffer::NewWithAvailableSize(payload_len);
-//    NL_TEST_ASSERT(inSuite, !buffer.IsNull());
+//     chip::System::PacketBufferHandle buffer = chip::System::PacketBuffer::NewWithAvailableSize(payload_len);
+// //    NL_TEST_ASSERT(inSuite, !buffer.IsNull());
 
-    memmove(buffer->Start(), PAYLOAD, payload_len);
-    buffer->SetDataLength(payload_len);
+//     memmove(buffer->Start(), PAYLOAD, payload_len);
+//     buffer->SetDataLength(payload_len);
 
-    chip::Inet::IPAddress addr;
-    chip::Inet::IPAddress::FromString("127.0.0.1", addr);
-    err = CHIP_NO_ERROR;
+//     chip::Inet::IPAddress addr;
+//     chip::Inet::IPAddress::FromString("127.0.0.1", addr);
+//     err = CHIP_NO_ERROR;
 
-    chip::TransportMgr<PigweedRpcTransport> transportMgr;
-    chip::SecureSessionMgr secureSessionMgr;
+//     chip::TransportMgr<PigweedRpcTransport> transportMgr;
+//     chip::SecureSessionMgr secureSessionMgr;
 
-    err = transportMgr.Init("LOOPBACK");
-//    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
-    auto sl = ctx.GetInetLayer().SystemLayer();
-    err = secureSessionMgr.Init(kSourceNodeId, sl, &transportMgr);
-//    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+//     err = transportMgr.Init("LOOPBACK");
+// //    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+//     auto sl = ctx.GetInetLayer().SystemLayer();
+//     err = secureSessionMgr.Init(kSourceNodeId, sl, &transportMgr);
+// //    NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
 
-//    callback.mSuite = inSuite;
+// //    callback.mSuite = inSuite;
 
-    secureSessionMgr.SetDelegate(&callback);
+//     secureSessionMgr.SetDelegate(&callback);
 
-    chip::SecurePairingUsingTestSecret pairing1(Optional<chip::NodeId>::Value(kSourceNodeId), 1, 2);
-    Optional<chip::Transport::PeerAddress> peer(chip::Transport::PeerAddress::UDP(addr, CHIP_PORT));
+//     chip::SecurePairingUsingTestSecret pairing1(Optional<chip::NodeId>::Value(kSourceNodeId), 1, 2);
+//     Optional<chip::Transport::PeerAddress> peer(chip::Transport::PeerAddress::UDP(addr, CHIP_PORT));
 
-    err = secureSessionMgr.NewPairing(peer, kDestinationNodeId, &pairing1);
-    // NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+//     err = secureSessionMgr.NewPairing(peer, kDestinationNodeId, &pairing1);
+//     // NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
 
-    chip::SecurePairingUsingTestSecret pairing2(Optional<chip::NodeId>::Value(kDestinationNodeId), 2, 1);
-    err = secureSessionMgr.NewPairing(peer, kSourceNodeId, &pairing2);
-    // NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+//     chip::SecurePairingUsingTestSecret pairing2(Optional<chip::NodeId>::Value(kDestinationNodeId), 2, 1);
+//     err = secureSessionMgr.NewPairing(peer, kSourceNodeId, &pairing2);
+//     // NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
 
-    // Should be able to send a message to itself by just calling send.
-    callback.ReceiveHandlerCallCount = 0;
+//     // Should be able to send a message to itself by just calling send.
+//     callback.ReceiveHandlerCallCount = 0;
 
-    err = secureSessionMgr.SendMessage(kDestinationNodeId, std::move(buffer));
-    // NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
+//     err = secureSessionMgr.SendMessage(kDestinationNodeId, std::move(buffer));
+//     // NL_TEST_ASSERT(inSuite, err == CHIP_NO_ERROR);
 
-    ctx.DriveIOUntil(1000 /* ms */, []() { return callback.ReceiveHandlerCallCount != 0; });
+//     ctx.DriveIOUntil(1000 /* ms */, []() { return callback.ReceiveHandlerCallCount != 0; });
 
-    // NL_TEST_ASSERT(inSuite, callback.ReceiveHandlerCallCount == 1);
+//     // NL_TEST_ASSERT(inSuite, callback.ReceiveHandlerCallCount == 1);
 
-    err = ctx.Shutdown();
+//     err = ctx.Shutdown();
+
+    chip_rpc_Response resp{0};
+    std::strncpy(reinterpret_cast<char*>(resp.packet.bytes),
+                PAYLOAD,
+                sizeof(PAYLOAD));
+    resp.packet.size = sizeof(PAYLOAD);
+    if (chip::rpc::response_writer.open()) {
+        chip::rpc::response_writer.Write(resp);
+    }
+
 }
 
 } // namespace
@@ -303,6 +349,7 @@ pw::Status TestService::SendMessage(ServerContext& ctx,
                     const chip_rpc_PacketOnTransport& packet_on_transport,
                     chip_rpc_Empty& response) {
     // implementation
+    PW_LOG_INFO("TestService::SendMessage");
     if (transport) {
         transport->HandleMessageReceived(packet_on_transport);
     }
@@ -314,9 +361,9 @@ pw::Status TestService::MessageTest(ServerContext& ctx,
                                     const chip_rpc_Transport& transportnumber,
                                     chip_rpc_Empty& response) {
     // implementation in a new thread
-    // k_thread_create(&test_thread_data, test_stack_area, K_THREAD_STACK_SIZEOF(test_stack_area), CheckMessageTest,
-    //                                 &sContext, NULL, NULL, TEST_PRIORITY, 0, K_NO_WAIT);
-    CheckMessageTest(&sContext, NULL, NULL);
+    k_thread_create(&test_thread_data, test_stack_area, K_THREAD_STACK_SIZEOF(test_stack_area), CheckMessageTest,
+                                    &sContext, NULL, NULL, TEST_PRIORITY, 0, K_NO_WAIT);
+//    CheckMessageTest(&sContext, NULL, NULL);
     return pw::Status::OK;
 }
 
@@ -325,6 +372,7 @@ pw::Status TestService::MessageTest(ServerContext& ctx,
 
 int main()
 {
+    k_mutex_init(&uart_mutex);
     pw_sys_io_Init();
 
     LOG_INF("==================================================");
